@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Brander</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            max-width: 900px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+        .input-group label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            display: block;
+        }
+        .input-group input[type="text"],
+        .input-group input[type="file"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+        .input-group input[type="text"]:focus,
+        .input-group input[type="file"]:focus {
+            outline: none;
+            border-color: #6366f1; /* Indigo-500 */
+        }
+        .btn-primary {
+            background-color: #6366f1; /* Indigo-500 */
+            color: white;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
+        }
+        .btn-primary:hover {
+            background-color: #4f46e5; /* Indigo-600 */
+            transform: translateY(-2px);
+        }
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+        canvas {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+            max-width: 100%;
+            height: auto;
+            display: block; /* Ensures no extra space below canvas */
+        }
+        .image-preview-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 200px; /* Minimum height for preview area */
+            background-color: #f9f9f9;
+            border: 1px dashed #ccc;
+            border-radius: 8px;
+            overflow: hidden; /* Hide overflow if image is too big initially */
+        }
+        .image-preview {
+            max-width: 100%;
+            max-height: 400px; /* Limit height for display */
+            object-fit: contain;
+            border-radius: 8px;
+        }
+        .hidden-canvas {
+            display: none; /* Hidden canvas for processing */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Marka Ekleme</h1>
+
+        <div class="input-group">
+            <label for="imageUpload">Orjinal Resim Yükle:</label>
+            <input type="file" id="imageUpload" accept="image/*" class="p-2 border rounded-md">
+        </div>
+
+        <div class="image-preview-container">
+            <img id="imagePreview" class="image-preview" src="https://placehold.co/400x300/e0e0e0/ffffff?text=Resim+Yükle" alt="Image Preview">
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="input-group">
+                <label for="brandName">Marka:</label>
+                <input type="text" id="brandName" placeholder="e.g., MY ACCESSORIES" value="MY ACCESSORIES" class="p-2 border rounded-md">
+            </div>
+            <div class="input-group">
+                <label for="phoneNumber">Tel:</label>
+                <input type="text" id="phoneNumber" placeholder="e.g., +90 555 555 5555" value="+90 555 555 5555" class="p-2 border rounded-md">
+            </div>
+            <div class="input-group col-span-1 md:col-span-2">
+                <label for="website">Website:</label>
+                <input type="text" id="website" placeholder="e.g., www.bombabomba.com" value="www.bombabomba.com" class="p-2 border rounded-md">
+            </div>
+        </div>
+
+        <button id="brandImageBtn" class="btn-primary">Orjinal Resim</button>
+
+        <h2 class="text-2xl font-bold text-center text-gray-800 mt-6 mb-4">Yeni Resim</h2>
+        <div class="output-container flex justify-center">
+            <canvas id="outputCanvas" class="hidden-canvas"></canvas>
+            <img id="brandedImageOutput" class="image-preview" src="https://placehold.co/400x300/e0e0e0/ffffff?text=Markalı+Resim" alt="Branded Image Output">
+        </div>
+        <button id="downloadBtn" class="btn-primary mt-4 hidden">Yeni Dosyayı İndir</button>
+    </div>
+
+    <script>
+        // Get DOM elements
+        const imageUpload = document.getElementById('imageUpload');
+        const imagePreview = document.getElementById('imagePreview');
+        const brandNameInput = document.getElementById('brandName');
+        const phoneNumberInput = document.getElementById('phoneNumber');
+        const websiteInput = document.getElementById('website');
+        const brandImageBtn = document.getElementById('brandImageBtn');
+        const outputCanvas = document.getElementById('outputCanvas');
+        const brandedImageOutput = document.getElementById('brandedImageOutput');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const ctx = outputCanvas.getContext('2d');
+
+        let uploadedImage = null; // To store the uploaded image object
+        let uploadedFileName = 'image'; // To store the uploaded file name without extension
+
+        // Handle image upload
+        imageUpload.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                // Store the original file name (without extension)
+                const fileNameParts = file.name.split('.');
+                uploadedFileName = fileNameParts.slice(0, -1).join('.');
+                if (uploadedFileName === '') { // Handle cases like ".htaccess"
+                    uploadedFileName = 'image';
+                }
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        uploadedImage = img; // Store the image
+                        imagePreview.src = e.target.result; // Display in preview
+                        imagePreview.style.display = 'block';
+                        downloadBtn.classList.add('hidden'); // Hide download button until new image is branded
+                        brandedImageOutput.src = "https://placehold.co/400x300/e0e0e0/ffffff?text=Branded+Image"; // Reset output preview
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                uploadedImage = null;
+                uploadedFileName = 'image'; // Reset filename
+                imagePreview.src = "https://placehold.co/400x300/e0e0e0/ffffff?text=Upload+Image";
+                imagePreview.style.display = 'block';
+                downloadBtn.classList.add('hidden');
+                brandedImageOutput.src = "https://placehold.co/400x300/e0e0e0/ffffff?text=Branded+Image";
+            }
+        });
+
+        // Handle branding image
+        brandImageBtn.addEventListener('click', () => {
+            if (!uploadedImage) {
+                // Using a custom modal for better user experience instead of alert
+                const message = "Lütfen önce bir resim yükleyin.";
+                // In a real application, you'd show a custom dialog here.
+                // For this example, we'll log to console or use a simple div message.
+                console.log(message);
+                // Example of a simple message display (can be styled as a modal)
+                let msgDiv = document.getElementById('messageBox');
+                if (!msgDiv) {
+                    msgDiv = document.createElement('div');
+                    msgDiv.id = 'messageBox';
+                    msgDiv.style.cssText = `
+                        position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+                        background-color: #f8d7da; color: #721c24; padding: 15px 20px;
+                        border-radius: 8px; border: 1px solid #f5c6cb; z-index: 1000;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                        font-weight: 600;
+                    `;
+                    document.body.appendChild(msgDiv);
+                }
+                msgDiv.textContent = message;
+                msgDiv.style.display = 'block';
+                setTimeout(() => {
+                    msgDiv.style.display = 'none';
+                }, 3000); // Hide after 3 seconds
+                return;
+            }
+
+            const brandName = brandNameInput.value.trim();
+            const phoneNumber = phoneNumberInput.value.trim();
+            const website = websiteInput.value.trim();
+
+            // Set canvas dimensions to match the uploaded image
+            outputCanvas.width = uploadedImage.width;
+            outputCanvas.height = uploadedImage.height;
+
+            // Draw the base image onto the canvas
+            ctx.drawImage(uploadedImage, 0, 0, outputCanvas.width, outputCanvas.height);
+
+            // Define branding section properties
+            const brandingSectionHeight = Math.max(outputCanvas.height * 0.15, 100); // Min height 100px or 15% of image height
+            const brandingSectionY = outputCanvas.height - brandingSectionHeight;
+            const padding = outputCanvas.width * 0.03; // 3% of width for padding
+
+            // Draw the background rectangle for branding
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'; // Dark background with some transparency
+            ctx.fillRect(0, brandingSectionY, outputCanvas.width, brandingSectionHeight);
+
+            // Set text properties
+            ctx.fillStyle = 'white';
+            ctx.textBaseline = 'middle';
+
+            // Calculate font sizes based on image width for responsiveness
+            const brandNameFontSize = outputCanvas.width * 0.04; // 4% of width
+            const contactFontSize = outputCanvas.width * 0.025; // 2.5% of width
+
+            // Draw Brand Name (Left side)
+            ctx.font = `bold ${brandNameFontSize}px Inter`;
+            ctx.textAlign = 'left';
+            const brandNameX = padding;
+            const brandNameY = brandingSectionY + brandingSectionHeight / 2;
+            ctx.fillText(brandName, brandNameX, brandNameY);
+
+            // Draw Contact Info (Right side)
+            ctx.font = `${contactFontSize}px Inter`;
+            ctx.textAlign = 'right';
+            const contactX = outputCanvas.width - padding;
+
+            // Calculate vertical positions for phone and website
+            const lineHeight = contactFontSize * 1.5; // Spacing between lines
+            const totalContactHeight = (phoneNumber ? lineHeight : 0) + (website ? lineHeight : 0);
+            let currentContactY = brandingSectionY + brandingSectionHeight / 2 - totalContactHeight / 2;
+
+            if (phoneNumber) {
+                ctx.fillText(phoneNumber, contactX, currentContactY);
+                currentContactY += lineHeight;
+            }
+            if (website) {
+                ctx.fillText(website, contactX, currentContactY);
+            }
+
+            // Display the branded image and enable download
+            brandedImageOutput.src = outputCanvas.toDataURL('image/jpeg', 0.9); // Get image data from canvas
+            downloadBtn.classList.remove('hidden');
+        });
+
+        // Handle download button click
+        downloadBtn.addEventListener('click', () => {
+            const link = document.createElement('a');
+            // Construct the new filename with "_marka" label
+            const newFileName = `${uploadedFileName}_marka.jpg`;
+            link.download = newFileName;
+            link.href = outputCanvas.toDataURL('image/jpeg', 0.9);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    </script>
+</body>
+</html>
