@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toplu Resim Markalama</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- JSZip for creating ZIP files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- FileSaver.js for saving files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            max-width: 1200px; /* Increased max-width for multiple images */
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+        .input-group label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            display: block;
+        }
+        .input-group input[type="text"],
+        .input-group input[type="file"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+        .input-group input[type="text"]:focus,
+        .input-group input[type="file"]:focus {
+            outline: none;
+            border-color: #6366f1; /* Indigo-500 */
+        }
+        .btn-primary {
+            background-color: #6366f1; /* Indigo-500 */
+            color: white;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
+        }
+        .btn-primary:hover {
+            background-color: #4f46e5; /* Indigo-600 */
+            transform: translateY(-2px);
+        }
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); /* Responsive grid */
+            gap: 15px;
+            padding: 10px;
+            border: 1px dashed #e0e0e0;
+            border-radius: 8px;
+            min-height: 150px;
+            align-items: start;
+            justify-items: center;
+        }
+        .image-grid-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            text-align: center;
+        }
+        .image-grid-item img {
+            width: 120px;
+            height: 120px;
+            object-fit: contain; /* Use contain to show full image, not cover */
+            border-radius: 8px;
+            border: 1px solid #eee;
+            background-color: #f9f9f9;
+        }
+        .logo-preview {
+            width: 80px; /* Fixed size for logo preview */
+            height: 80px;
+            object-fit: contain;
+            border-radius: 8px;
+            border: 1px solid #eee;
+            background-color: #f9f9f9;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            color: white;
+            font-size: 1.5em;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Toplu Resim Markalama</h1>
+
+        <div class="input-group">
+            <label for="imageUpload">Toplu Resim Yükle:</label>
+            <input type="file" id="imageUpload" accept="image/*" multiple class="p-2 border rounded-md">
+        </div>
+
+        <h2 class="text-xl font-semibold text-gray-700 mt-4">Yüklenen Resimler</h2>
+        <div id="uploadedImagesContainer" class="image-grid">
+            <!-- Uploaded image previews will be inserted here -->
+            <p class="text-gray-500">Henüz resim yüklenmedi.</p>
+        </div>
+
+        <div class="input-group">
+            <label for="logoUpload">Logo Yükle (İsteğe Bağlı):</label>
+            <input type="file" id="logoUpload" accept="image/*" class="p-2 border rounded-md">
+            <div class="mt-2 flex justify-center">
+                <img id="logoPreview" class="logo-preview" src="https://placehold.co/80x80/e0e0e0/ffffff?text=Logo" alt="Logo Preview">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="input-group">
+                <label for="brandName">Marka:</label>
+                <input type="text" id="brandName" placeholder="e.g., MY ACCESSORIES" value="MY ACCESSORIES" class="p-2 border rounded-md">
+            </div>
+            <div class="input-group">
+                <label for="phoneNumber">Tel:</label>
+                <input type="text" id="phoneNumber" placeholder="e.g., +90 555 555 5555" value="+90 555 555 5555" class="p-2 border rounded-md">
+            </div>
+            <div class="input-group col-span-1 md:col-span-2">
+                <label for="website">Website:</label>
+                <input type="text" id="website" placeholder="e.g., www.bombabomba.com" value="www.bombabomba.com" class="p-2 border rounded-md">
+            </div>
+        </div>
+
+        <button id="brandImagesBtn" class="btn-primary">Resimleri Markala</button>
+
+        <h2 class="text-xl font-semibold text-gray-700 mt-6">Markalı Resimler</h2>
+        <div id="brandedImagesContainer" class="image-grid">
+            <!-- Branded image previews will be inserted here -->
+            <p class="text-gray-500">Markalı resimler burada görünecek.</p>
+        </div>
+
+        <button id="downloadAllBtn" class="btn-primary mt-4 hidden">Tüm Markalı Resimleri İndir (ZIP)</button>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="spinner"></div>
+        <p>Resimler işleniyor ve ZIP oluşturuluyor...</p>
+    </div>
+
+    <script>
+        // Get DOM elements
+        const imageUpload = document.getElementById('imageUpload');
+        const uploadedImagesContainer = document.getElementById('uploadedImagesContainer');
+        const logoUpload = document.getElementById('logoUpload');
+        const logoPreview = document.getElementById('logoPreview');
+        const brandNameInput = document.getElementById('brandName');
+        const phoneNumberInput = document.getElementById('phoneNumber');
+        const websiteInput = document.getElementById('website');
+        const brandImagesBtn = document.getElementById('brandImagesBtn');
+        const brandedImagesContainer = document.getElementById('brandedImagesContainer');
+        const downloadAllBtn = document.getElementById('downloadAllBtn');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+
+        // Array to store uploaded image data (Image object and original filename)
+        let uploadedImages = [];
+        // Object to store the uploaded logo image
+        let uploadedLogo = null;
+        // Array to store branded image data (data URL and new filename)
+        let brandedImages = [];
+
+        // Function to show/hide loading overlay
+        function showLoading(message = "İşleniyor...") {
+            loadingOverlay.querySelector('p').textContent = message;
+            loadingOverlay.classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            loadingOverlay.classList.add('hidden');
+        }
+
+        // Function to display a custom message (instead of alert)
+        function showMessage(message, type = 'info') {
+            let msgDiv = document.getElementById('messageBox');
+            if (!msgDiv) {
+                msgDiv = document.createElement('div');
+                msgDiv.id = 'messageBox';
+                msgDiv.style.cssText = `
+                    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+                    padding: 15px 20px; border-radius: 8px; z-index: 1000;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    font-weight: 600;
+                    display: none; /* Hidden by default */
+                `;
+                document.body.appendChild(msgDiv);
+            }
+
+            // Set styles based on message type
+            if (type === 'error') {
+                msgDiv.style.backgroundColor = '#f8d7da';
+                msgDiv.style.color = '#721c24';
+                msgDiv.style.border = '1px solid #f5c6cb';
+            } else { // info
+                msgDiv.style.backgroundColor = '#d1ecf1';
+                msgDiv.style.color = '#0c5460';
+                msgDiv.style.border = '1px solid #bee5eb';
+            }
+
+            msgDiv.textContent = message;
+            msgDiv.style.display = 'block';
+            setTimeout(() => {
+                msgDiv.style.display = 'none';
+            }, 3000); // Hide after 3 seconds
+        }
+
+        // Handle multiple image uploads
+        imageUpload.addEventListener('change', (event) => {
+            uploadedImages = []; // Clear previous images
+            uploadedImagesContainer.innerHTML = '<p class="text-gray-500">Henüz resim yüklenmedi.</p>'; // Clear previews
+            brandedImagesContainer.innerHTML = '<p class="text-gray-500">Markalı resimler burada görünecek.</p>'; // Clear branded previews
+            brandedImages = []; // Clear previous branded images
+            downloadAllBtn.classList.add('hidden'); // Hide download button
+
+            const files = event.target.files;
+            if (files.length === 0) {
+                return;
+            }
+
+            uploadedImagesContainer.innerHTML = ''; // Clear placeholder text
+
+            Array.from(files).forEach(file => {
+                if (!file.type.startsWith('image/')) {
+                    showMessage(`"${file.name}" bir resim dosyası değil. Lütfen sadece resim dosyaları yükleyin.`, 'error');
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        // Store the image object and its original filename
+                        uploadedImages.push({
+                            image: img,
+                            fileName: file.name
+                        });
+
+                        // Create a preview thumbnail
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'image-grid-item';
+                        const imgElement = document.createElement('img');
+                        imgElement.src = e.target.result;
+                        imgElement.alt = file.name;
+                        const nameSpan = document.createElement('span');
+                        nameSpan.textContent = file.name;
+
+                        itemDiv.appendChild(imgElement);
+                        itemDiv.appendChild(nameSpan);
+                        uploadedImagesContainer.appendChild(itemDiv);
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        });
+
+        // Handle logo upload
+        logoUpload.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                if (!file.type.startsWith('image/')) {
+                    showMessage('Lütfen geçerli bir logo resmi yükleyin.', 'error');
+                    logoPreview.src = "https://placehold.co/80x80/e0e0e0/ffffff?text=Logo";
+                    uploadedLogo = null;
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        uploadedLogo = img; // Store the logo image object
+                        logoPreview.src = e.target.result; // Display in preview
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                uploadedLogo = null;
+                logoPreview.src = "https://placehold.co/80x80/e0e0e0/ffffff?text=Logo";
+            }
+        });
+
+        // Function to brand a single image
+        function brandSingleImage(imageObj, brandName, phoneNumber, website, logoImage) {
+            return new Promise(resolve => {
+                const img = imageObj.image;
+                const originalFileName = imageObj.fileName;
+
+                // Create a temporary canvas for branding
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+
+                // Set canvas dimensions to match the uploaded image
+                tempCanvas.width = img.width;
+                tempCanvas.height = img.height;
+
+                // Draw the base image onto the canvas
+                tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+
+                // Define branding section properties
+                const brandingSectionHeight = Math.max(tempCanvas.height * 0.15, 100); // Min height 100px or 15% of image height
+                const brandingSectionY = tempCanvas.height - brandingSectionHeight;
+                const padding = tempCanvas.width * 0.03; // 3% of width for padding
+
+                // Draw the background rectangle for branding
+                tempCtx.fillStyle = 'rgba(0, 0, 0, 0.8)'; // Dark background with some transparency
+                tempCtx.fillRect(0, brandingSectionY, tempCanvas.width, brandingSectionHeight);
+
+                // Set text properties
+                tempCtx.fillStyle = 'white';
+                tempCtx.textBaseline = 'middle';
+
+                // Calculate font sizes based on image width for responsiveness
+                const brandNameFontSize = tempCanvas.width * 0.04; // 4% of width
+                const contactFontSize = tempCanvas.width * 0.025; // 2.5% of width
+
+                let currentX = padding; // Starting X position for logo/brand name
+
+                // Draw Logo if available
+                if (logoImage) {
+                    const logoMaxHeight = brandingSectionHeight * 0.7; // 70% of branding bar height
+                    const logoAspectRatio = logoImage.width / logoImage.height;
+                    let logoDrawWidth = logoMaxHeight * logoAspectRatio;
+                    let logoDrawHeight = logoMaxHeight;
+
+                    // Ensure logo doesn't exceed available width (e.g., before text)
+                    const availableWidthForLogo = tempCanvas.width * 0.2; // Example: 20% of canvas width
+                    if (logoDrawWidth > availableWidthForLogo) {
+                        logoDrawWidth = availableWidthForLogo;
+                        logoDrawHeight = logoDrawWidth / logoAspectRatio;
+                    }
+
+                    const logoY = brandingSectionY + (brandingSectionHeight - logoDrawHeight) / 2;
+                    tempCtx.drawImage(logoImage, currentX, logoY, logoDrawWidth, logoDrawHeight);
+                    currentX += logoDrawWidth + padding / 2; // Move X position past the logo
+                }
+
+                // Draw Brand Name (Left side, after logo if present)
+                tempCtx.font = `bold ${brandNameFontSize}px Inter`;
+                tempCtx.textAlign = 'left';
+                const brandNameY = brandingSectionY + brandingSectionHeight / 2;
+                tempCtx.fillText(brandName, currentX, brandNameY);
+
+                // Draw Contact Info (Right side)
+                tempCtx.font = `${contactFontSize}px Inter`;
+                tempCtx.textAlign = 'right';
+                const contactX = tempCanvas.width - padding;
+
+                // Calculate vertical positions for phone and website
+                const lineHeight = contactFontSize * 1.5; // Spacing between lines
+                const totalContactHeight = (phoneNumber ? lineHeight : 0) + (website ? lineHeight : 0);
+                let currentContactY = brandingSectionY + brandingSectionHeight / 2 - totalContactHeight / 2;
+
+                if (phoneNumber) {
+                    tempCtx.fillText(phoneNumber, contactX, currentContactY);
+                    currentContactY += lineHeight;
+                }
+                if (website) {
+                    tempCtx.fillText(website, contactX, currentContactY);
+                }
+
+                // Get the branded image data URL
+                const brandedDataUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
+
+                // Construct the new filename with "_markalı" label
+                const fileNameParts = originalFileName.split('.');
+                const baseName = fileNameParts.slice(0, -1).join('.');
+                const extension = fileNameParts.length > 1 ? '.' + fileNameParts[fileNameParts.length - 1] : '';
+                const newFileName = `${baseName}_markalı${extension}`;
+
+                resolve({
+                    dataUrl: brandedDataUrl,
+                    fileName: newFileName
+                });
+            });
+        }
+
+        // Handle branding multiple images
+        brandImagesBtn.addEventListener('click', async () => {
+            if (uploadedImages.length === 0) {
+                showMessage('Lütfen önce resim yükleyin.', 'error');
+                return;
+            }
+
+            showLoading('Resimler markalanıyor...');
+            brandedImages = []; // Clear previous branded images
+            brandedImagesContainer.innerHTML = ''; // Clear previous previews
+
+            const brandName = brandNameInput.value.trim();
+            const phoneNumber = phoneNumberInput.value.trim();
+            const website = websiteInput.value.trim();
+
+            for (const imageObj of uploadedImages) {
+                const branded = await brandSingleImage(imageObj, brandName, phoneNumber, website, uploadedLogo);
+                brandedImages.push(branded);
+
+                // Display branded image preview
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'image-grid-item';
+                const imgElement = document.createElement('img');
+                imgElement.src = branded.dataUrl;
+                imgElement.alt = branded.fileName;
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = branded.fileName;
+
+                itemDiv.appendChild(imgElement);
+                itemDiv.appendChild(nameSpan);
+                brandedImagesContainer.appendChild(itemDiv);
+            }
+
+            hideLoading();
+            downloadAllBtn.classList.remove('hidden'); // Show download button
+            showMessage('Tüm resimler başarıyla markalandı!', 'info');
+        });
+
+        // Handle download all branded images as ZIP
+        downloadAllBtn.addEventListener('click', async () => {
+            if (brandedImages.length === 0) {
+                showMessage('İndirilecek markalı resim yok.', 'error');
+                return;
+            }
+
+            showLoading('ZIP dosyası oluşturuluyor...');
+            const zip = new JSZip();
+
+            for (const branded of brandedImages) {
+                // Remove data:image/jpeg;base64, prefix to get pure base64 string
+                const base64Data = branded.dataUrl.split(',')[1];
+                zip.file(branded.fileName, base64Data, { base64: true });
+            }
+
+            // Generate the ZIP file
+            zip.generateAsync({ type: "blob" })
+                .then(function(content) {
+                    saveAs(content, "markali_resimler.zip"); // Use FileSaver.js to save the blob
+                    hideLoading();
+                    showMessage('ZIP dosyası başarıyla indirildi!', 'info');
+                })
+                .catch(error => {
+                    hideLoading();
+                    showMessage('ZIP oluşturulurken bir hata oluştu: ' + error.message, 'error');
+                    console.error("ZIP generation error:", error);
+                });
+        });
+    </script>
+</body>
+</html>
